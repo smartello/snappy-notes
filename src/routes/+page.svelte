@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
   import Editor from '$lib/Editor.svelte';
   import type { LanguageId } from '$lib/Editor.svelte';
+  import { saveEditorState, loadEditorState } from '$lib/store';
 
   let cursorLine = $state(1);
   let cursorCol = $state(1);
@@ -16,7 +18,43 @@
 
   let currentLang = $state<LanguageId>('typescript');
   let showLangPicker = $state(false);
-  let editorRef: ReturnType<typeof Editor> | undefined;
+  let editorRef = $state<ReturnType<typeof Editor> | undefined>(undefined);
+  let ready = $state(false);
+  let initialContent = $state<string | undefined>(undefined);
+  let initialLanguage = $state<LanguageId | undefined>(undefined);
+
+  // Load persisted state before mounting editor
+  let saveInterval: ReturnType<typeof setInterval>;
+  onMount(async () => {
+    const saved = await loadEditorState();
+    if (saved) {
+      initialContent = saved.content;
+      initialLanguage = saved.language;
+      currentLang = saved.language;
+    }
+    ready = true;
+
+    // Apply language after editor mounts (next tick)
+    await new Promise((r) => setTimeout(r, 0));
+    if (saved && editorRef) {
+      editorRef.setLanguage(saved.language);
+    }
+
+    // Start auto-save only after state is loaded
+    saveInterval = setInterval(() => {
+      if (editorRef) {
+        saveEditorState({ content: editorRef.getContent(), language: currentLang });
+      }
+    }, 2000);
+  });
+
+  onDestroy(() => {
+    clearInterval(saveInterval);
+    // Final save
+    if (editorRef) {
+      saveEditorState({ content: editorRef.getContent(), language: currentLang });
+    }
+  });
 
   function handleCursorChange(info: { line: number; col: number; selected: number; totalLines: number; tabSize: number }) {
     cursorLine = info.line;
@@ -30,6 +68,9 @@
     currentLang = lang;
     showLangPicker = false;
     editorRef?.setLanguage(lang);
+    if (editorRef) {
+      saveEditorState({ content: editorRef.getContent(), language: lang });
+    }
   }
 
   function handlePickerKeydown(e: KeyboardEvent) {
@@ -66,7 +107,9 @@
 
     <!-- Main editor -->
     <div class="editor-content">
-      <Editor bind:this={editorRef} onCursorChange={handleCursorChange} />
+      {#if ready}
+        <Editor bind:this={editorRef} onCursorChange={handleCursorChange} {initialContent} {initialLanguage} />
+      {/if}
     </div>
   </div>
 

@@ -29,7 +29,11 @@
     tabSize: number;
   }
 
-  let { onCursorChange }: { onCursorChange?: (info: CursorInfo) => void } = $props();
+  let { onCursorChange, initialContent, initialLanguage }: {
+    onCursorChange?: (info: CursorInfo) => void;
+    initialContent?: string;
+    initialLanguage?: LanguageId;
+  } = $props();
 
   let editorContainer: HTMLDivElement;
   let view: EditorView;
@@ -41,6 +45,10 @@
       });
       view.focus();
     }
+  }
+
+  export function getContent(): string {
+    return view?.state.doc.toString() ?? '';
   }
 
   const cursorTracker = EditorView.updateListener.of((update) => {
@@ -107,12 +115,13 @@
     },
   });
 
-  const sampleCode = `// Welcome to Snappy Notes ✨
+  const defaultContent = `// Welcome to Snappy Notes ✨
 // A fast, lightweight editor powered by Tauri + SvelteKit + CodeMirror`;
 
   onMount(() => {
+    const lang = initialLanguage ?? 'typescript';
     const state = EditorState.create({
-      doc: sampleCode,
+      doc: initialContent ?? defaultContent,
       extensions: [
         lineNumbers(),
         highlightActiveLineGutter(),
