@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { LanguageId } from './Editor.svelte';
+  import type { LanguageId } from './types';
 
   interface Props {
     line: number;

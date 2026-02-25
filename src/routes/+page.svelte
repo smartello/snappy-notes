@@ -2,51 +2,68 @@
   import { onMount, onDestroy } from 'svelte';
   import Editor from '$lib/Editor.svelte';
   import StatusBar from '$lib/StatusBar.svelte';
-  import type { LanguageId } from '$lib/Editor.svelte';
-  import { saveEditorState, loadEditorState } from '$lib/store';
+  import TabBar from '$lib/TabBar.svelte';
+  import type { LanguageId } from '$lib/types';
+  import type { Tab } from '$lib/types';
+  import { createTab } from '$lib/types';
+  import { saveAppState, loadAppState } from '$lib/store';
+
+  let tabs = $state<Tab[]>([]);
+  let activeTabId = $state('');
+  let editorRef = $state<ReturnType<typeof Editor> | undefined>(undefined);
+  let ready = $state(false);
 
   let cursorLine = $state(1);
   let cursorCol = $state(1);
   let selectedChars = $state(0);
   let totalLines = $state(0);
 
-  let currentLang = $state<LanguageId>('typescript');
-  let editorRef = $state<ReturnType<typeof Editor> | undefined>(undefined);
-  let ready = $state(false);
-  let initialContent = $state<string | undefined>(undefined);
-  let initialLanguage = $state<LanguageId | undefined>(undefined);
+  const activeTab = $derived(tabs.find(t => t.id === activeTabId));
+  const currentLang = $derived<LanguageId>(activeTab?.language ?? 'plaintext');
 
-  // Load persisted state before mounting editor
+  let tabCounter = 1;
+
+  // Persist
   let saveInterval: ReturnType<typeof setInterval>;
+
+  function snapshotActiveTab() {
+    if (activeTab && editorRef) {
+      activeTab.content = editorRef.getContent();
+    }
+  }
+
+  function save() {
+    snapshotActiveTab();
+    saveAppState({ tabs, activeTabId });
+  }
+
   onMount(async () => {
-    const saved = await loadEditorState();
-    if (saved) {
-      initialContent = saved.content;
-      initialLanguage = saved.language;
-      currentLang = saved.language;
+    const saved = await loadAppState();
+    if (saved && saved.tabs.length > 0) {
+      tabs = saved.tabs;
+      activeTabId = saved.activeTabId;
+      tabCounter = saved.tabs.length + 1;
+    } else {
+      const first = createTab(tabCounter++);
+      first.content = `// Welcome to Snappy Notes ✨\n// A fast, lightweight editor powered by Tauri + SvelteKit + CodeMirror`;
+      first.language = 'typescript';
+      tabs = [first];
+      activeTabId = first.id;
     }
     ready = true;
 
-    // Apply language after editor mounts (next tick)
+    // Apply language after editor mounts
     await new Promise((r) => setTimeout(r, 0));
-    if (saved && editorRef) {
-      editorRef.setLanguage(saved.language);
+    if (editorRef && activeTab) {
+      editorRef.setLanguage(activeTab.language);
     }
 
-    // Start auto-save only after state is loaded
-    saveInterval = setInterval(() => {
-      if (editorRef) {
-        saveEditorState({ content: editorRef.getContent(), language: currentLang });
-      }
-    }, 2000);
+    saveInterval = setInterval(save, 2000);
   });
 
   onDestroy(() => {
     clearInterval(saveInterval);
-    // Final save
-    if (editorRef) {
-      saveEditorState({ content: editorRef.getContent(), language: currentLang });
-    }
+    save();
   });
 
   function handleCursorChange(info: { line: number; col: number; selected: number; totalLines: number; tabSize: number }) {
@@ -57,26 +74,67 @@
   }
 
   function handleLanguageChange(lang: LanguageId) {
-    currentLang = lang;
-    editorRef?.setLanguage(lang);
-    if (editorRef) {
-      saveEditorState({ content: editorRef.getContent(), language: lang });
+    if (activeTab) {
+      activeTab.language = lang;
     }
+    editorRef?.setLanguage(lang);
+    save();
+  }
+
+  function selectTab(id: string) {
+    if (id === activeTabId) return;
+    snapshotActiveTab();
+    activeTabId = id;
+    const tab = tabs.find(t => t.id === id);
+    if (tab && editorRef) {
+      editorRef.setContent(tab.content);
+      editorRef.setLanguage(tab.language);
+      editorRef.focus();
+    }
+  }
+
+  function closeTab(id: string) {
+    if (tabs.length <= 1) return;
+    snapshotActiveTab();
+    const idx = tabs.findIndex(t => t.id === id);
+    tabs = tabs.filter(t => t.id !== id);
+    if (id === activeTabId) {
+      const newIdx = Math.min(idx, tabs.length - 1);
+      activeTabId = tabs[newIdx].id;
+      const tab = tabs[newIdx];
+      if (editorRef) {
+        editorRef.setContent(tab.content);
+        editorRef.setLanguage(tab.language);
+        editorRef.focus();
+      }
+    }
+    save();
+  }
+
+  function newTab() {
+    snapshotActiveTab();
+    const tab = createTab(tabCounter++);
+    tabs = [...tabs, tab];
+    activeTabId = tab.id;
+    if (editorRef) {
+      editorRef.setContent(tab.content);
+      editorRef.setLanguage(tab.language);
+      editorRef.focus();
+    }
+    save();
   }
 </script>
 
 <div class="app-shell">
-  <!-- Status bar top (tabs area) -->
-  <div class="tab-bar">
-    <div class="tab active">
-      <span class="tab-icon">TS</span>
-      <span>untitled-1.ts</span>
-    </div>
-  </div>
+  <TabBar
+    {tabs}
+    {activeTabId}
+    onSelect={selectTab}
+    onClose={closeTab}
+    onNew={newTab}
+  />
 
-  <!-- Editor area -->
   <div class="editor-area">
-    <!-- Activity bar (icon sidebar) -->
     <div class="activity-bar">
       <button class="activity-icon active" aria-label="Explorer" title="Explorer">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
@@ -90,10 +148,14 @@
       </button>
     </div>
 
-    <!-- Main editor -->
     <div class="editor-content">
-      {#if ready}
-        <Editor bind:this={editorRef} onCursorChange={handleCursorChange} {initialContent} {initialLanguage} />
+      {#if ready && activeTab}
+        <Editor
+          bind:this={editorRef}
+          onCursorChange={handleCursorChange}
+          initialContent={activeTab.content}
+          initialLanguage={activeTab.language}
+        />
       {/if}
     </div>
   </div>
@@ -130,41 +192,6 @@
     height: 100vh;
     width: 100vw;
     overflow: hidden;
-  }
-
-  .tab-bar {
-    height: 35px;
-    background-color: #252526;
-    display: flex;
-    align-items: flex-end;
-    flex-shrink: 0;
-    border-bottom: 1px solid #1e1e1e;
-  }
-
-  .tab {
-    height: 35px;
-    padding: 0 16px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background-color: #1e1e1e;
-    color: #cccccc;
-    font-size: 13px;
-    border-right: 1px solid #252526;
-    cursor: pointer;
-    -webkit-user-select: none;
-    user-select: none;
-  }
-
-  .tab.active {
-    background-color: #1e1e1e;
-    border-top: 1px solid #007acc;
-  }
-
-  .tab-icon {
-    font-size: 10px;
-    font-weight: 700;
-    color: #519aba;
   }
 
   .editor-area {

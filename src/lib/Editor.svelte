@@ -11,7 +11,8 @@
   import { markdown } from '@codemirror/lang-markdown';
   import { oneDark } from '@codemirror/theme-one-dark';
 
-  export type LanguageId = 'typescript' | 'markdown' | 'plaintext';
+  import type { LanguageId } from './types';
+  export type { LanguageId };
 
   const languageExtensions: Record<LanguageId, () => import('@codemirror/state').Extension> = {
     typescript: () => javascript({ typescript: true }),
@@ -49,6 +50,18 @@
 
   export function getContent(): string {
     return view?.state.doc.toString() ?? '';
+  }
+
+  export function setContent(content: string) {
+    if (view) {
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: content },
+      });
+    }
+  }
+
+  export function focus() {
+    view?.focus();
   }
 
   const cursorTracker = EditorView.updateListener.of((update) => {
