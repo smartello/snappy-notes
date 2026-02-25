@@ -7,9 +7,30 @@
     onSelect: (id: string) => void;
     onClose: (id: string) => void;
     onNew: () => void;
+    onRename: (id: string, title: string) => void;
   }
 
-  let { tabs, activeTabId, onSelect, onClose, onNew }: Props = $props();
+  let { tabs, activeTabId, onSelect, onClose, onNew, onRename }: Props = $props();
+
+  let editingTabId = $state<string | null>(null);
+  let editValue = $state('');
+
+  function startEditing(tab: Tab) {
+    editingTabId = tab.id;
+    editValue = tab.title;
+  }
+
+  function commitEdit() {
+    if (editingTabId && editValue.trim()) {
+      onRename(editingTabId, editValue.trim());
+    }
+    editingTabId = null;
+  }
+
+  function handleEditKeydown(e: KeyboardEvent) {
+    if (e.key === 'Enter') commitEdit();
+    if (e.key === 'Escape') editingTabId = null;
+  }
 
   const langIcons: Record<string, string> = {
     typescript: 'TS',
@@ -24,10 +45,23 @@
       class="tab"
       class:active={tab.id === activeTabId}
       onclick={() => onSelect(tab.id)}
+      ondblclick={() => startEditing(tab)}
     >
       <span class="tab-icon">{langIcons[tab.language] ?? 'TXT'}</span>
-      <span class="tab-title">{tab.title}</span>
-      {#if tabs.length > 1}
+      {#if editingTabId === tab.id}
+        <!-- svelte-ignore a11y_autofocus -->
+        <input
+          class="tab-edit-input"
+          bind:value={editValue}
+          onblur={commitEdit}
+          onkeydown={handleEditKeydown}
+          autofocus
+          onclick={(e: MouseEvent) => e.stopPropagation()}
+        />
+      {:else}
+        <span class="tab-title">{tab.title}</span>
+      {/if}
+      {#if tabs.length > 1 && editingTabId !== tab.id}
         <button
           class="tab-close"
           aria-label="Close tab"
@@ -87,6 +121,19 @@
 
   .tab-title {
     pointer-events: none;
+  }
+
+  .tab-edit-input {
+    background: #1e1e1e;
+    border: 1px solid #007acc;
+    color: #cccccc;
+    font-size: 13px;
+    font-family: inherit;
+    padding: 0 4px;
+    height: 20px;
+    width: 100px;
+    outline: none;
+    border-radius: 2px;
   }
 
   .tab-close {

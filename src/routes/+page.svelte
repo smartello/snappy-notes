@@ -123,6 +123,15 @@
     }
     save();
   }
+
+  function renameTab(id: string, title: string) {
+    const tab = tabs.find(t => t.id === id);
+    if (tab) {
+      tab.title = title;
+      tabs = tabs;
+      save();
+    }
+  }
 </script>
 
 <div class="app-shell">
@@ -132,6 +141,7 @@
     onSelect={selectTab}
     onClose={closeTab}
     onNew={newTab}
+    onRename={renameTab}
   />
 
   <div class="editor-area">
