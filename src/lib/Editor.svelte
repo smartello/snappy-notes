@@ -135,8 +135,6 @@
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         bracketMatching(),
         closeBrackets(),
-        rectangularSelection(),
-        crosshairCursor(),
         highlightActiveLine(),
         highlightSelectionMatches(),
         keymap.of([
