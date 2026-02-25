@@ -41,11 +41,15 @@
 
 <div class="tab-bar">
   {#each tabs as tab (tab.id)}
-    <button
+    <div
       class="tab"
       class:active={tab.id === activeTabId}
+      role="tab"
+      tabindex="0"
+      aria-selected={tab.id === activeTabId}
       onclick={() => onSelect(tab.id)}
       ondblclick={() => startEditing(tab)}
+      onkeydown={(e: KeyboardEvent) => { if (e.key === 'Enter') onSelect(tab.id); }}
     >
       <span class="tab-icon">{langIcons[tab.language] ?? 'TXT'}</span>
       {#if editingTabId === tab.id}
@@ -68,7 +72,7 @@
           onclick={(e: MouseEvent) => { e.stopPropagation(); onClose(tab.id); }}
         >×</button>
       {/if}
-    </button>
+    </div>
   {/each}
   <button class="tab-new" aria-label="New tab" onclick={onNew}>+</button>
 </div>
